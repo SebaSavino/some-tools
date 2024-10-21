@@ -1,0 +1,55 @@
+kind: pipeline
+type: docker
+
+name: Testing
+
+steps:
+  - name: Run unit tests
+    image: node
+    commands:
+      - npm install
+      - npm run test
+
+  - name: Failure slack notification
+    image: plugins/slack
+    settings:
+      webhook:
+        from_secret: SLACK_WEBHOOK
+    when:
+      status:
+        - failure
+---
+kind: pipeline
+type: ssh
+
+name: Deploy
+
+server:
+  host:
+    from_secret: VPS_IP
+  user:
+    from_secret: VPS_USER
+  password:
+    from_secret: VPS_PASSWORD
+
+steps:
+  - name: VPS / Kubernetes deploy
+    commands:
+      - ...
+
+  - name: Slack notification
+    environment:
+      webhook:
+        from_secret: SLACK_WEBHOOK
+    commands:
+      - |
+        curl -s -X POST -H 'Content-type: application/json' \
+        --data '{"text":"${DRONE_REPO_NAME}: Build ${DRONE_BUILD_LINK} ${DRONE_STAGE_STATUS}"}' \
+        $webhook &> /dev/null
+    when:
+      status:
+        - success
+        - failure
+
+depends_on:
+  - Testing
